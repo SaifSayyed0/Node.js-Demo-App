@@ -26,8 +26,8 @@ Try a different port: `PORT=8080 node server.js` (Windows PowerShell: `$env:PORT
 - **Frontend vs backend**: `public/index.html` runs in the browser; `server.js` runs on the server. They talk through `/api/...` requests (see the green log at the bottom of the page and your terminal).
 - **REST verbs**: GET reads, PUT saves, DELETE removes.
 
-## Server setup commands (fresh Ubuntu EC2)
-Run these after you SSH in. They are written for Ubuntu 22.04 / 24.04.
+## Server setup commands (fresh Debian EC2)
+Run these after you SSH in. They are written for Debian 22.04 / 24.04.
 
 ### 1. Update and upgrade the system
 ```bash
@@ -44,7 +44,7 @@ node -v && npm -v        # confirm both installed
 ```
 
 ### 3. Install the MySQL/MariaDB command-line client
-Newer Debian and Ubuntu releases no longer ship a package called `mysql-client`. The drop-in replacement is the MariaDB client, which provides the same `mysql` command and connects to MySQL and RDS databases. It installs only the client, not a database server.
+Newer Debian and Debian releases no longer ship a package called `mysql-client`. The drop-in replacement is the MariaDB client, which provides the same `mysql` command and connects to MySQL and RDS databases. It installs only the client, not a database server.
 ```bash
 sudo apt install -y mariadb-client-compat
 mysql --version
@@ -172,16 +172,16 @@ SSL_KEY=certs/key.pem SSL_CERT=certs/cert.pem pm2 start server.js --name notes
 | Nginx needed | No | Yes |
 | Good for | Quick demo | Closer to production |
 
-## Deploy on EC2 (Ubuntu)
-1. Launch an EC2 instance (Ubuntu, t2/t3.micro). Create or download a key pair.
+## Deploy on EC2 (Debian)
+1. Launch an EC2 instance (Debian, t2/t3.micro). Create or download a key pair.
 2. **Security group** inbound rules: SSH (22) from your IP, Custom TCP **3000** from 0.0.0.0/0. Without this rule the firewall blocks your port.
 3. Copy the project:
    ```bash
-   scp -i key.pem -r notes-app ubuntu@<EC2_PUBLIC_IP>:~
+   scp -i key.pem -r notes-app Debian@<EC2_PUBLIC_IP>:~
    ```
 4. SSH in and install Node:
    ```bash
-   ssh -i key.pem ubuntu@<EC2_PUBLIC_IP>
+   ssh -i key.pem Debian@<EC2_PUBLIC_IP>
    sudo apt update && sudo apt install -y nodejs
    node -v     # should be 18 or higher; otherwise install via NodeSource
    ```
