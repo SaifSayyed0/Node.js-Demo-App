@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=Newsreader:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#eef1f6; --panel:#ffffff; --ink:#1b2333; --muted:#6b7488; --line:#d9deea;
+    --accent:#2f5bea; --accent-ink:#fff; --danger:#c43d3d; --log:#121826; --log-ink:#a9f0c4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1420; --panel:#171e2e; --ink:#e7ebf5; --muted:#8c97ae; --line:#27314a; --accent:#6f93ff; --accent-ink:#0f1420; --log:#0a0e18; }
+  }
+  * { box-sizing:border-box; }
+  html,body { height:100%; margin:0; }
+  body { background:var(--bg); color:var(--ink); font:16px/1.5 "Bricolage Grotesque",system-ui,sans-serif; display:flex; flex-direction:column; }
+  header { display:flex; justify-content:space-between; align-items:center; padding:12px 20px; border-bottom:1px solid var(--line); background:var(--panel); }
+  header h1 { font-size:18px; margin:0; font-weight:700; }
+  #server { font-size:13px; color:var(--muted); }
+  #server b { color:var(--ink); }
+  main { flex:1; display:grid; grid-template-columns:260px 1fr; min-height:0; }
+  aside { background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0; }
+  aside button.new { margin:14px; padding:10px; border:0; border-radius:8px; background:var(--accent); color:var(--accent-ink); font:inherit; font-weight:700; cursor:pointer; }
+  #list { overflow:auto; flex:1; }
+  .item { padding:10px 16px; cursor:pointer; border-left:3px solid transparent; }
+  .item:hover { background:var(--bg); }
+  .item.active { border-left-color:var(--accent); background:var(--bg); }
+  .item small { display:block; color:var(--muted); font-size:12px; }
+  .editor { display:flex; flex-direction:column; min-height:0; padding:18px 28px; gap:10px; }
+  .bar { display:flex; gap:10px; align-items:center; }
+  #title { flex:1; font:700 24px "Bricolage Grotesque",sans-serif; border:0; background:transparent; color:var(--ink); outline:none; border-bottom:2px solid var(--line); padding:4px 0; }
+  #title:focus { border-color:var(--accent); }
+  #status { font-size:13px; color:var(--muted); min-width:70px; text-align:right; }
+  button.ghost { border:1px solid var(--line); background:transparent; color:var(--danger); border-radius:8px; padding:7px 12px; font:inherit; cursor:pointer; }
+  #body { flex:1; resize:none; border:1px solid var(--line); border-radius:10px; background:var(--panel); color:var(--ink); padding:18px 20px; font:18px/1.7 "Newsreader",Georgia,serif; outline:none; }
+  #body:focus { border-color:var(--accent); }
+  #log { background:var(--log); color:var(--log-ink); font:12px/1.6 ui-monospace,Menlo,Consolas,monospace; height:130px; overflow:auto; padding:8px 16px; border-top:1px solid var(--line); }
+  #log div:first-child { color:#fff; }
+  .empty { color:var(--muted); padding:16px; font-size:14px; }
+  @media (max-width:700px){ main{grid-template-columns:1fr; grid-template-rows:170px 1fr;} aside{border-right:0;border-bottom:1px solid var(--line);} .editor{padding:12px;} }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Notes</h1>
+  <div id="server">connecting to server…</div>
+</header>
+<main>
+  <aside>
+    <button class="new" id="newBtn">New note</button>
+    <div id="list"></div>
+  </aside>
+  <section class="editor">
+    <div class="bar">
+      <input id="title" placeholder="Note title" autocomplete="off">
+      <span id="status"></span>
+      <button class="ghost" id="delBtn">Delete</button>
+    </div>
+    <textarea id="body" placeholder="Write in Markdown. It saves automatically as a .md file on the server."></textarea>
+  </section>
+</main>
+<div id="log"><div>Requests this page sends to the server:</div></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let current = null;      // name of the open note (null = unsaved new note)
+let timer = null;
+
+// Wrapper around fetch that also prints each request in the log panel
+async function api(method, url, body) {
+  const t = performance.now();
+  const res = await fetch(url, {
+    method, headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const ms = Math.round(performance.now() - t);
+  const line = document.createElement("div");
+  line.textContent = `${method.padEnd(6)} ${url}  ->  ${res.status}  (${ms}ms)`;
+  $("log").appendChild(line);
+  $("log").scrollTop = $("log").scrollHeight;
+  return res.json();
+}
+
+async function loadInfo() {
+  const i = await api("GET", "/api/info");
+  $("server").innerHTML = `Page served from <b>${location.host}</b> · server port <b>${i.port}</b> · Node ${i.node}`;
+}
+
+async function loadList() {
+  const notes = await api("GET", "/api/notes");
+  const el = $("list");
+  el.innerHTML = notes.length ? "" : '<div class="empty">No notes yet. Create your first one.</div>';
+  notes.forEach((n) => {
+    const d = document.createElement("div");
+    d.className = "item" + (n.name === current ? " active" : "");
+    d.innerHTML = `${n.name.replace(/-/g, " ")}<small>${new Date(n.updated).toLocaleString()}</small>`;
+    d.onclick = () => openNote(n.name);
+    el.appendChild(d);
+  });
+}
+
+async function openNote(name) {
+  const n = await api("GET", "/api/notes/" + encodeURIComponent(name));
+  current = n.name;
+  $("title").value = n.name.replace(/-/g, " ");
+  $("body").value = n.content;
+  $("status").textContent = "";
+  loadList();
+}
+
+function newNote() {
+  current = null;
+  $("title").value = "";
+  $("body").value = "";
+  $("title").focus();
+  loadList();
+}
+
+async function save() {
+  const title = $("title").value.trim();
+  if (!title) { $("status").textContent = "Add a title"; return; }
+  const name = title.replace(/[^\w\- ]/g, "").replace(/\s+/g, "-");
+  if (!name) { $("status").textContent = "Use letters or numbers"; return; }
+  // Title changed on an existing note: rename = save under new name, delete old
+  if (current && current !== name) await api("DELETE", "/api/notes/" + encodeURIComponent(current));
+  await api("PUT", "/api/notes/" + encodeURIComponent(name), { content: $("body").value });
+  current = name;
+  $("status").textContent = "Saved";
+  loadList();
+}
+
+function queueSave() {
+  $("status").textContent = "Typing…";
+  clearTimeout(timer);
+  timer = setTimeout(save, 700);
+}
+
+$("title").addEventListener("input", queueSave);
+$("body").addEventListener("input", queueSave);
+$("newBtn").onclick = newNote;
+$("delBtn").onclick = async () => {
+  if (!current || !confirm("Delete this note?")) return;
+  await api("DELETE", "/api/notes/" + encodeURIComponent(current));
+  newNote();
+};
+
+loadInfo();
+loadList();
+</script>
+</body>
+</html>
